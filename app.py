@@ -3,7 +3,7 @@ import os
 import requests
 import warnings
 from dotenv import load_dotenv
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory
 
@@ -13,30 +13,224 @@ from langchain.memory import ConversationBufferMemory
 # =========================
 st.set_page_config(page_title="🌾 Crop Advisor", layout="wide")
 
+# =========================
+# PREMIUM CSS STYLING
+# =========================
+def apply_custom_css():
+    st.markdown("""
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;600;700&display=swap');
+
+        /* Global Overrides */
+        :root {
+            --bg-deep: #0E1117;
+            --emerald: #10B981;
+            --gold: #F59E0B;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #E5E7EB;
+            --text-dim: #9CA3AF;
+        }
+
+        .stApp {
+            background-color: var(--bg-deep);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-main);
+        }
+
+        /* Glassmorphism Card */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        /* Bento Grid */
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        .bento-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .bento-item:hover {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: var(--emerald);
+            transform: scale(1.02);
+        }
+
+        .bento-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .bento-label {
+            font-size: 12px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .bento-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--gold);
+            margin-top: 4px;
+        }
+
+        /* Premium Chat Interface */
+        .chat-container {
+            max-height: 600px;
+            overflow-y: auto;
+            padding-right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .chat-bubble {
+            max-width: 85%;
+            padding: 14px 18px;
+            border-radius: 18px;
+            font-size: 14.5px;
+            line-height: 1.5;
+            position: relative;
+            animation: slideIn 0.4s ease-out;
+        }
+
+        .chat-bubble-user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat-bubble-ai {
+            align-self: flex-start;
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            color: white;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+        }
+
+        .ai-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-weight: 600;
+            font-size: 12px;
+            color: rgba(255,255,255,0.9);
+        }
+
+        .sparkle-icon {
+            animation: sparkle 1.5s infinite ease-in-out;
+        }
+
+        /* Sidebar Styling */
+        [data-testid="stSidebar"] {
+            background-color: #0B0E14;
+            border-right: 1px solid var(--glass-border);
+        }
+
+        [data-testid="stSidebar"] .stSelectbox label,
+        [data-testid="stSidebar"] .stButton button {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes sparkle {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* Customizing Streamlit Inputs */
+        .stTextInput input {
+            background-color: rgba(255, 255, 255, 0.05) !important;
+            border: 1px solid var(--glass-border) !important;
+            color: white !important;
+            border-radius: 10px !important;
+        }
+
+        .stButton button {
+            background: linear-gradient(90deg, var(--emerald) 0%, #059669 100%) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 10px !important;
+            font-weight: 600 !important;
+            padding: 10px 24px !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .stButton button:hover {
+            transform: scale(1.02) !important;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4) !important;
+        }
+
+        /* Hide Streamlit elements */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        </style>
+    """, unsafe_allow_html=True)
+
 
 # =========================
 # INITIAL SETUP
 # =========================
 def load_env_vars():
-    # load from .streamlit/secrets.toml
-    groq_api_key = st.secrets.api_keys.GROQ_API_KEY
-    weather_api_key = st.secrets.api_keys.WEATHER_API_KEY
-    return weather_api_key, groq_api_key
-
-    # load_dotenv()
-    # return os.getenv("WEATHER_API_KEY"), os.getenv("GROQ_API_KEY")
+    load_dotenv()
+    weather_api_key = os.getenv("WEATHER_API_KEY")
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    return weather_api_key, google_api_key
 
 
-def init_groq_conversation(groq_api_key: str):
-    if not groq_api_key:
-        st.warning("Please set Groq API key in the environment variables.")
+def init_google_conversation(google_api_key: str, model_name: str = "gemini-2.0-flash"):
+    if not google_api_key:
+        st.warning("Please set Google API key in the environment variables.")
         return None
 
-    os.environ["GROQ_API_KEY"] = groq_api_key
     warnings.filterwarnings("ignore", message=".*ConversationChain.*")
     warnings.filterwarnings("ignore", message=".*Chain.run.*")
 
-    crop_bot = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.3)
+    crop_bot = ChatGoogleGenerativeAI(
+        model=model_name, 
+        google_api_key=google_api_key, 
+        temperature=0.3,
+        max_retries=1  # Prevent long UI freezes during quota limits
+    )
     memory = ConversationBufferMemory()
     return ConversationChain(llm=crop_bot, memory=memory)
 
@@ -45,11 +239,20 @@ def call_conversation(conversation_obj, query: str) -> str:
     """Compatibility helper to call LangChain conversation."""
     try:
         return conversation_obj.invoke(query)
-    except Exception:
+    except Exception as e:
+        error_str = str(e)
+        if "429" in error_str or "ResourceExhausted" in error_str:
+            if "GenerateRequestsPerDay" in error_str:
+                return "🚨 **Daily Quota Exhausted:** You have reached the maximum number of requests allowed per day for this model on the free tier. **Try switching to a different model (e.g., Gemini 1.5 Flash) in the sidebar.**"
+            return "⚠️ **Rate Limit Reached:** You are sending requests too quickly. Please wait about 60 seconds and try again. For more details, check [Gemini API Limits](https://ai.google.dev/gemini-api/docs/rate-limits)."
+        
         try:
             return conversation_obj.invoke({"input": query})
         except Exception:
-            return conversation_obj.run(query)
+            try:
+                return conversation_obj.run(query)
+            except Exception as final_e:
+                return f"❌ **Error:** {str(final_e)}"
 
 
 # =========================
@@ -103,15 +306,52 @@ def check_weather_forecast(city, api_key):
 # MAIN APP LAYOUT
 # =========================
 def main():
-    st.title("🌦️ Weather-aware Crop Advisor")
+    apply_custom_css()
+    
+    st.markdown("""
+        <div style="text-align: center; padding: 20px 0; animation: fadeIn 1s ease-out;">
+            <h1 style="font-family: 'Poppins', sans-serif; font-weight: 700; color: #10B981; margin-bottom: 0;">
+                🌦️ Crop Advisor <span style="color: #F59E0B; font-weight: 300;">SaaS</span>
+            </h1>
+            <p style="color: #9CA3AF; font-size: 1.1rem; margin-top: 5px;">Precision Agriculture powered by Gemini AI</p>
+        </div>
+    """, unsafe_allow_html=True)
 
-    weather_api_key, groq_api_key = load_env_vars()
-    if "conversation" not in st.session_state:
-        st.session_state.conversation = init_groq_conversation(groq_api_key)
-        st.session_state.chat_history = []
-        # Flag to track whether the initial recommendation has been generated
+    weather_api_key, google_api_key = load_env_vars()
+
+    # Sidebar for Settings
+    with st.sidebar:
+        st.markdown("<h2 style='font-family:Poppins; color:#10B981;'>⚙️ Configuration</h2>", unsafe_allow_html=True)
+        
+        with st.expander("🤖 Model Settings", expanded=True):
+            selected_model = st.selectbox(
+                "AI Intelligence Level",
+                ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-3-flash-preview", "gemini-flash-latest"],
+                help="Switch models if you hit rate limits."
+            )
+        
+        with st.expander("🛠️ Advanced", expanded=False):
+            if st.button("Clear Cache & History", use_container_width=True):
+                st.session_state.conversation = init_google_conversation(google_api_key, selected_model)
+                st.session_state.chat_history = []
+                st.session_state.initial_reco_done = False
+                st.rerun()
+        
+        st.markdown("---")
+        st.markdown("""
+            <div style='padding: 10px; border-radius: 10px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2);'>
+                <p style='color: #10B981; font-size: 0.8rem; margin: 0;'>
+                    💡 <b>Tip:</b> Provide detailed crop varieties for better accuracy.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    if "conversation" not in st.session_state or st.session_state.get("current_model") != selected_model:
+        st.session_state.conversation = init_google_conversation(google_api_key, selected_model)
+        st.session_state.current_model = selected_model
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
         st.session_state.initial_reco_done = False
-        # Store weather data persistently
         st.session_state.weather_data = None
         st.session_state.current_city = None
         st.session_state.current_crop = None
@@ -121,23 +361,58 @@ def main():
 
     # -------- LEFT COLUMN: Inputs --------
     with col1:
-        st.subheader("🧩 Input Information")
-        crop = st.text_input("Enter your crop name:")
-        city = st.text_input("Enter your city:")
-        get_reco = st.button("Get Initial Recommendation")
+        st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #10B981; margin-top:0;'>🧩 Parameters</h3>", unsafe_allow_html=True)
+        crop = st.text_input("Crop Name", placeholder="e.g. Organic Wheat")
+        city = st.text_input("Location", placeholder="e.g. Islamabad")
+        get_reco = st.button("Generate Recommendation", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
         
         # Display weather data if available
         if st.session_state.weather_data:
-            st.subheader("🌤️ Current Weather Data")
-            weather_info = st.session_state.weather_data
+            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #10B981; margin-top:0;'>🌤️ Weather Dashboard</h3>", unsafe_allow_html=True)
             
-            st.success(f"Weather in {st.session_state.current_city}: {weather_info['condition']} ({weather_info['description']})")
-            st.info(f"🌡️ Temperature: {weather_info['temp_c']}°C ({weather_info['temp_f']}°F)")
-            st.info(f"💧 Humidity: {weather_info['humidity']}% | 🌬️ Wind: {weather_info['wind_speed']} m/s")
-            st.info(f"📊 Pressure: {weather_info['pressure']} hPa | 👁️ Visibility: {weather_info['visibility']}m")
+            w = st.session_state.weather_data
+            st.markdown(f"""
+                <div class='bento-grid'>
+                    <div class='bento-item'>
+                        <span class='bento-icon'>🌡️</span>
+                        <span class='bento-label'>Temp</span>
+                        <div class='bento-value'>{w['temp_c']}°C</div>
+                    </div>
+                    <div class='bento-item'>
+                        <span class='bento-icon'>💧</span>
+                        <span class='bento-label'>Humidity</span>
+                        <div class='bento-value'>{w['humidity']}%</div>
+                    </div>
+                    <div class='bento-item'>
+                        <span class='bento-icon'>🌬️</span>
+                        <span class='bento-label'>Wind</span>
+                        <div class='bento-value'>{w['wind_speed']}m/s</div>
+                    </div>
+                    <div class='bento-item'>
+                        <span class='bento-icon'>📊</span>
+                        <span class='bento-label'>Pressure</span>
+                        <div class='bento-value'>{w['pressure']}hPa</div>
+                    </div>
+                </div>
+                <div style='padding: 10px; border-radius: 8px; background: rgba(245, 158, 11, 0.1); border-left: 4px solid #F59E0B;'>
+                    <p style='margin:0; color: #F59E0B; font-weight: 500;'>
+                        <b>Condition:</b> {w['condition']} — {w['description'].title()}
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
             
-            if weather_info.get('forecast_avg_temp') != 'N/A':
-                st.info(f"📈 24h Forecast: Avg Temp: {weather_info['forecast_avg_temp']}°C | Avg Humidity: {weather_info['forecast_avg_humidity']}% | Rain: {weather_info['forecast_rain']}mm")
+            if w.get('forecast_avg_temp') != 'N/A':
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown(f"""
+                    <div style='font-size: 0.85rem; color: #9CA3AF; display: flex; justify-content: space-between;'>
+                        <span>📈 24h Forecast Avg: <b>{w['forecast_avg_temp']}°C</b></span>
+                        <span>☔ Rain: <b>{w['forecast_rain']}mm</b></span>
+                    </div>
+                """, unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         if get_reco:
             if not weather_api_key:
@@ -149,12 +424,19 @@ def main():
                 return
 
             # Fetch current weather
-            weather_data = requests.get(
+            response = requests.get(
                 f"https://api.openweathermap.org/data/2.5/weather?q={city}&units=metric&APPID={weather_api_key}"
-            ).json()
+            )
+            weather_data = response.json()
 
-            if weather_data.get("cod") == "404":
-                st.error("City not found!")
+            if response.status_code != 200:
+                error_msg = weather_data.get("message", "Unknown error occurred")
+                if response.status_code == 401:
+                    st.error(f"Invalid Weather API Key: {error_msg}. If you just created the key, it may take up to 2 hours to activate.")
+                elif response.status_code == 404:
+                    st.error(f"City not found: {city}")
+                else:
+                    st.error(f"Weather API Error ({response.status_code}): {error_msg}")
                 return
 
             # Extract comprehensive weather data
@@ -171,21 +453,24 @@ def main():
             uv_index = weather_data.get("uv", "N/A")
             
             # Get 5-day forecast for better analysis
-            forecast_data = requests.get(
+            forecast_response = requests.get(
                 f"https://api.openweathermap.org/data/2.5/forecast?q={city}&units=metric&APPID={weather_api_key}"
-            ).json()
+            )
+            forecast_data = forecast_response.json()
             
             # Initialize forecast variables
             avg_temp = "N/A"
             avg_humidity = "N/A"
             total_rain = "N/A"
             
-            if forecast_data.get("cod") == "200":
+            if forecast_response.status_code == 200:
                 # Analyze forecast trends
                 forecast_list = forecast_data["list"][:8]  # Next 24 hours (8 x 3-hour intervals)
                 avg_temp = round(sum(item["main"]["temp"] for item in forecast_list) / len(forecast_list))
                 avg_humidity = round(sum(item["main"]["humidity"] for item in forecast_list) / len(forecast_list))
                 total_rain = sum(item.get("rain", {}).get("3h", 0) for item in forecast_list)
+            else:
+                st.warning(f"Could not fetch forecast data: {forecast_data.get('message', 'Unknown error')}")
             
             # Store weather data in session state
             st.session_state.weather_data = {
@@ -249,8 +534,9 @@ def main():
             Provide specific, actionable advice tailored to the current conditions in {city}.
             Provide the answer in a concise manner.
             """
-            response = call_conversation(st.session_state.conversation, query)
-            reply = response["response"] if isinstance(response, dict) else response
+            with st.spinner("🤖 AI is analyzing weather data and generating recommendations..."):
+                response = call_conversation(st.session_state.conversation, query)
+                reply = response["response"] if isinstance(response, dict) else response
 
             st.session_state.chat_history.append(("User", query))
             st.session_state.chat_history.append(("Assistant", reply))
@@ -274,123 +560,60 @@ def main():
 
     # -------- RIGHT COLUMN: Chatbot --------
     with col2:
-        # Enhanced chat header with attractive styling
-        st.markdown("""
-        <div style="background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); 
-                    padding: 1rem; 
-                    border-radius: 10px; 
-                    margin-bottom: 1rem;
-                    text-align: center;">
-            <h3 style="color: white; margin: 0; font-size: 1.2rem;">
-                🌱🤖 AI Crop Assistant
-            </h3>
-            <p style="color: #e0e0e0; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                Your intelligent farming companion
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #10B981; margin-top:0;'>💬 Crop Intelligence</h3>", unsafe_allow_html=True)
 
-        # Chat messages container with enhanced styling
+        # Chat messages container
         if st.session_state.chat_history:
-            st.markdown("### 💭 Conversation History")
-            
-            # Create a scrollable container for chat messages
-            chat_container = st.container()
-            with chat_container:
-                for speaker, message in st.session_state.chat_history:
-                    if speaker == "User":
-                        # Extract first line for display
-                        first_line = message.split('\n')[0].strip()
-                        # Enhanced user message styling
-                        st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                                    padding: 0.8rem; 
-                                    border-radius: 15px 15px 5px 15px; 
-                                    margin: 0.5rem 0; 
-                                    color: white;
-                                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                            <div style="display: flex; align-items: center; margin-bottom: 0.3rem;">
-                                <span style="font-size: 1.2rem; margin-right: 0.5rem;">👤</span>
-                                <strong>You asked:</strong>
-                            </div>
-                            <div style="font-size: 0.95rem;">
-                                {first_line}
-                            </div>
+            st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
+            for speaker, message in st.session_state.chat_history:
+                if speaker == "User":
+                    # Extract first line for display
+                    first_line = message.split('\n')[0].strip()
+                    if "Growing" in first_line and "growing" in first_line.lower():
+                        first_line = f"Analyze conditions for {st.session_state.current_crop}"
+                    
+                    st.markdown(f"""
+                        <div class='chat-bubble chat-bubble-user'>
+                            {first_line}
                         </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        # Enhanced assistant message styling
-                        st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
-                                    padding: 0.8rem; 
-                                    border-radius: 15px 15px 15px 5px; 
-                                    margin: 0.5rem 0; 
-                                    color: white;
-                                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                            <div style="display: flex; align-items: center; margin-bottom: 0.3rem;">
-                                <span style="font-size: 1.2rem; margin-right: 0.5rem;">🌾</span>
-                                <strong>AI Assistant replied:</strong>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                        <div class='chat-bubble chat-bubble-ai'>
+                            <div class='ai-header'>
+                                <span class='sparkle-icon'>✨</span> AI RECOMMENDATION
                             </div>
-                            <div style="font-size: 0.95rem; line-height: 1.4;">
-                                {message}
-                            </div>
+                            {message}
                         </div>
-                        """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
-            # Welcome message when no chat history
             st.markdown("""
-            <div style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); 
-                        padding: 2rem; 
-                        border-radius: 15px; 
-                        text-align: center;
-                        margin: 1rem 0;">
-                <h4 style="color: #333; margin: 0 0 1rem 0;">🌱 Welcome to AI Crop Assistant!</h4>
-                <p style="color: #666; margin: 0; font-size: 0.95rem;">
-                    Get personalized crop recommendations based on your location and weather conditions.
-                    Start by getting your initial recommendation on the left!
-                </p>
-            </div>
+                <div style='text-align: center; padding: 40px 20px;'>
+                    <div style='font-size: 50px; margin-bottom: 20px;'>🤖</div>
+                    <h4 style='color: #E5E7EB; margin-bottom: 10px;'>Ready for Analysis</h4>
+                    <p style='color: #9CA3AF; font-size: 0.9rem;'>
+                        Complete the parameters on the left to generate your first weather-aware crop strategy.
+                    </p>
+                </div>
             """, unsafe_allow_html=True)
 
-        # Enhanced chat input section
-        st.markdown("---")
+        st.markdown("<br>", unsafe_allow_html=True)
         
         if not st.session_state.get("initial_reco_done", False):
-            # Disabled state with attractive styling
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); 
-                        padding: 1rem; 
-                        border-radius: 10px; 
-                        text-align: center;
-                        margin: 1rem 0;">
-                <p style="color: #8b4513; margin: 0; font-weight: 500;">
-                    🔒 Chat is locked - Get your initial recommendation first!
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-            st.chat_input("Ask a follow-up question...", disabled=True)
+            st.chat_input("Chat is locked until recommendation is generated", disabled=True)
         else:
-            # Active chat input with enhanced styling
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); 
-                        padding: 0.8rem; 
-                        border-radius: 10px; 
-                        text-align: center;
-                        margin-bottom: 0.5rem;">
-                <p style="color: #333; margin: 0; font-weight: 500;">
-                    💬 Ready to chat! Ask me anything about your crops
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            follow_up = st.chat_input("Ask a follow-up question...")
+            follow_up = st.chat_input("Ask about irrigation, pests, or harvesting...")
 
             if follow_up:
                 st.session_state.chat_history.append(("User", follow_up))
-                reply = call_conversation(st.session_state.conversation, follow_up)
-                reply_text = reply["response"] if isinstance(reply, dict) else reply
+                with st.spinner("🤖 Consulting AI Models..."):
+                    reply = call_conversation(st.session_state.conversation, follow_up)
+                    reply_text = reply["response"] if isinstance(reply, dict) else reply
                 st.session_state.chat_history.append(("Assistant", reply_text))
                 st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
