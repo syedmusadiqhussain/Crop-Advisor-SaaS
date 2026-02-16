@@ -1,6 +1,7 @@
 streamlit
-google-generativeai
 langchain
 langchain-community
-pandas
+langchain-google-genai
+google-generativeai
 requests
+pandas
