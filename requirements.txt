@@ -1,7 +1,6 @@
-streamlit 
-langchain 
-langchain_google_genai
-python-dotenv
-openai 
-requests
+streamlit
 google-generativeai
+langchain
+langchain-community
+pandas
+requests
