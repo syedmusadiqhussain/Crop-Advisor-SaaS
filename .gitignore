@@ -4,7 +4,11 @@ __pycache__/
 *$py.class
 
 # Streamlit secrets
+.env
+secrets.toml
+.streamlit/
 .streamlit/secrets.toml
+screenshots/
 
 # C extensions
 *.so

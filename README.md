@@ -3,13 +3,13 @@
 
 # 🌾 Crop Advisor — Precision Agriculture SaaS
 
-Deliver weather‑aware, localized crop recommendations powered by Gemini 2.0 Flash. Fast Streamlit UI, actionable insights, and a configurable AI sidebar that adapts to your usage.
+Deliver weather‑aware, localized crop recommendations powered by OpenRouter (OpenAI-compatible API) with free-model support. Fast Streamlit UI, actionable insights, and a configurable AI sidebar that adapts to your usage.
 
 ---
 
 ## ✨ Key Features
 
-- ⚡ AI Model Selection: Uses Google’s Gemini 2.0 Flash by default, with a sidebar selector to switch models when needed
+- ⚡ AI Model Selection: Uses OpenRouter models (including free tiers) with a sidebar selector to switch models when needed
 - 📍 Localized Recommendations: Enter your crop and city to get tailored guidance based on current and forecasted conditions
 - 🛠️ Advanced Configuration Sidebar: Reset conversation, change models, and manage session state without leaving the page
 - 🌤️ Weather Dashboard: Bento‑style grid highlighting temperature, humidity, wind, pressure, and forecast indicators
@@ -20,7 +20,7 @@ Deliver weather‑aware, localized crop recommendations powered by Gemini 2.0 Fl
 ## 🧱 Tech Stack
 
 - Streamlit (UI and app framework)
-- Google Generative AI SDK (Gemini 2.0 Flash via LangChain)
+- OpenRouter (OpenAI-compatible) via LangChain ChatOpenAI
 - Python (3.10+ recommended)
 - OpenWeatherMap API (current weather and 24h forecast)
 
@@ -58,13 +58,14 @@ pip install -r requirements.txt
 Create a `.env` file in the project root and add:
 
 ```env
-GOOGLE_API_KEY=your_google_gemini_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
 WEATHER_API_KEY=your_openweathermap_api_key
 ```
 
 Notes:
 - The `.gitignore` already excludes `.env` for safety
 - If you just generated your OpenWeatherMap key, activation can take up to 2 hours
+- For Hugging Face Spaces, set the same values in Space Settings → Secrets (recommended). The app reads from `st.secrets` first and falls back to environment variables for local dev.
 
 ---
 

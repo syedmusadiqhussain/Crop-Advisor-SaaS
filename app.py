@@ -3,9 +3,7 @@ import os
 import requests
 import warnings
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.chains import ConversationChain
-from langchain.memory import ConversationBufferMemory
+from langchain_openai import ChatOpenAI
 
 
 # =========================
@@ -210,49 +208,97 @@ def apply_custom_css():
 # =========================
 # INITIAL SETUP
 # =========================
+def get_secret_or_env(key: str):
+    try:
+        secrets = st.secrets
+        if key in secrets:
+            value = secrets.get(key)
+            if value:
+                return value
+    except Exception:
+        pass
+    value = os.getenv(key)
+    return value if value else None
+
+
 def load_env_vars():
     load_dotenv()
-    weather_api_key = os.getenv("WEATHER_API_KEY")
-    google_api_key = os.getenv("GOOGLE_API_KEY")
-    return weather_api_key, google_api_key
+    weather_api_key = get_secret_or_env("WEATHER_API_KEY")
+    openrouter_api_key = get_secret_or_env("OPENROUTER_API_KEY") or get_secret_or_env("OPENAI_API_KEY")
+    demo_mode = os.getenv("DEMO_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
+    return weather_api_key, openrouter_api_key, demo_mode
 
 
-def init_google_conversation(google_api_key: str, model_name: str = "gemini-2.0-flash"):
-    if not google_api_key:
-        st.warning("Please set Google API key in the environment variables.")
+class DemoConversation:
+    def __init__(self, model_name: str):
+        self.model_name = model_name
+
+    def invoke(self, query: str):
+        return (
+            "Demo mode is enabled, so this is a sample recommendation.\n\n"
+            "- Use well-drained soil and maintain consistent moisture.\n"
+            "- Water early morning; reduce irrigation when humidity is high.\n"
+            "- Increase scouting for pests after rain or warm nights.\n"
+            "- Mulch to reduce evaporation and stabilize soil temperature.\n"
+            "- Use windbreaks or staking if strong winds are expected."
+        )
+
+
+class OpenRouterConversation:
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str,
+        temperature: float = 0.3,
+        max_output_tokens: int = 600,
+    ):
+        self.llm = ChatOpenAI(
+            model=model_name,
+            openai_api_key=api_key,
+            openai_api_base="https://openrouter.ai/api/v1",
+            temperature=temperature,
+            max_tokens=max_output_tokens,
+        )
+
+    def invoke(self, query: str):
+        return self.llm.invoke(query)
+
+
+def init_llm_conversation(
+    openrouter_api_key: str, model_name: str, demo_mode: bool = False
+):
+    if demo_mode:
+        return DemoConversation(model_name=model_name)
+
+    if not openrouter_api_key:
+        st.warning("Please set OPENROUTER_API_KEY (or OPENAI_API_KEY) in the environment variables.")
         return None
 
-    warnings.filterwarnings("ignore", message=".*ConversationChain.*")
-    warnings.filterwarnings("ignore", message=".*Chain.run.*")
-
-    crop_bot = ChatGoogleGenerativeAI(
-        model=model_name, 
-        google_api_key=google_api_key, 
-        temperature=0.3,
-        max_retries=1  # Prevent long UI freezes during quota limits
-    )
-    memory = ConversationBufferMemory()
-    return ConversationChain(llm=crop_bot, memory=memory)
+    warnings.filterwarnings("ignore")
+    return OpenRouterConversation(api_key=openrouter_api_key, model_name=model_name)
 
 
 def call_conversation(conversation_obj, query: str) -> str:
-    """Compatibility helper to call LangChain conversation."""
+    """Compatibility helper that always uses .invoke() and returns a string."""
+    if conversation_obj is None:
+        return "❌ **Error:** AI client is not configured. Set `OPENROUTER_API_KEY` (or enable `DEMO_MODE=1`)."
     try:
-        return conversation_obj.invoke(query)
+        result = conversation_obj.invoke(query)
+        if isinstance(result, str):
+            return result
+        if isinstance(result, dict):
+            return str(result.get("response") or result.get("content") or "")
+        content = getattr(result, "content", None)
+        if isinstance(content, str):
+            return content
+        return str(result)
     except Exception as e:
         error_str = str(e)
-        if "429" in error_str or "ResourceExhausted" in error_str:
-            if "GenerateRequestsPerDay" in error_str:
-                return "🚨 **Daily Quota Exhausted:** You have reached the maximum number of requests allowed per day for this model on the free tier. **Try switching to a different model (e.g., Gemini 1.5 Flash) in the sidebar.**"
-            return "⚠️ **Rate Limit Reached:** You are sending requests too quickly. Please wait about 60 seconds and try again. For more details, check [Gemini API Limits](https://ai.google.dev/gemini-api/docs/rate-limits)."
-        
-        try:
-            return conversation_obj.invoke({"input": query})
-        except Exception:
-            try:
-                return conversation_obj.run(query)
-            except Exception as final_e:
-                return f"❌ **Error:** {str(final_e)}"
+        if "429" in error_str:
+            return "⚠️ **Rate Limit Reached:** Please wait and retry, or switch the model in the sidebar."
+        if "401" in error_str or "Unauthorized" in error_str:
+            return "❌ **Unauthorized:** Check your `OPENROUTER_API_KEY`."
+        return f"❌ **Error:** {error_str}"
 
 
 # =========================
@@ -313,11 +359,12 @@ def main():
             <h1 style="font-family: 'Poppins', sans-serif; font-weight: 700; color: #10B981; margin-bottom: 0;">
                 🌦️ Crop Advisor <span style="color: #F59E0B; font-weight: 300;">SaaS</span>
             </h1>
-            <p style="color: #9CA3AF; font-size: 1.1rem; margin-top: 5px;">Precision Agriculture powered by Gemini AI</p>
+            <p style="color: #9CA3AF; font-size: 1.1rem; margin-top: 5px;">Precision Agriculture powered by OpenRouter</p>
         </div>
     """, unsafe_allow_html=True)
 
-    weather_api_key, google_api_key = load_env_vars()
+    weather_api_key, openrouter_api_key, demo_mode = load_env_vars()
+    st.session_state.demo_mode = demo_mode
 
     # Sidebar for Settings
     with st.sidebar:
@@ -326,13 +373,21 @@ def main():
         with st.expander("🤖 Model Settings", expanded=True):
             selected_model = st.selectbox(
                 "AI Intelligence Level",
-                ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-3-flash-preview", "gemini-flash-latest"],
+                [
+                    "google/gemini-2.0-flash-lite-001:free",
+                    "mistralai/mistral-7b-instruct",
+                    "mistralai/mistral-7b-instruct-v0.3",
+                    "meta-llama/llama-3.1-8b-instruct",
+                    "openai/gpt-4o-mini",
+                ],
                 help="Switch models if you hit rate limits."
             )
         
         with st.expander("🛠️ Advanced", expanded=False):
             if st.button("Clear Cache & History", use_container_width=True):
-                st.session_state.conversation = init_google_conversation(google_api_key, selected_model)
+                st.session_state.conversation = init_llm_conversation(
+                    openrouter_api_key, selected_model, demo_mode=st.session_state.get("demo_mode", False)
+                )
                 st.session_state.chat_history = []
                 st.session_state.initial_reco_done = False
                 st.rerun()
@@ -347,7 +402,9 @@ def main():
         """, unsafe_allow_html=True)
 
     if "conversation" not in st.session_state or st.session_state.get("current_model") != selected_model:
-        st.session_state.conversation = init_google_conversation(google_api_key, selected_model)
+        st.session_state.conversation = init_llm_conversation(
+            openrouter_api_key, selected_model, demo_mode=st.session_state.get("demo_mode", False)
+        )
         st.session_state.current_model = selected_model
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = []
@@ -415,7 +472,7 @@ def main():
             st.markdown("</div>", unsafe_allow_html=True)
 
         if get_reco:
-            if not weather_api_key:
+            if not weather_api_key and not demo_mode:
                 st.error("Please set your Weather API key in .env file.")
                 return
 
@@ -423,54 +480,69 @@ def main():
                 st.warning("Please fill in both crop name and city.")
                 return
 
-            # Fetch current weather
-            response = requests.get(
-                f"https://api.openweathermap.org/data/2.5/weather?q={city}&units=metric&APPID={weather_api_key}"
-            )
-            weather_data = response.json()
-
-            if response.status_code != 200:
-                error_msg = weather_data.get("message", "Unknown error occurred")
-                if response.status_code == 401:
-                    st.error(f"Invalid Weather API Key: {error_msg}. If you just created the key, it may take up to 2 hours to activate.")
-                elif response.status_code == 404:
-                    st.error(f"City not found: {city}")
-                else:
-                    st.error(f"Weather API Error ({response.status_code}): {error_msg}")
-                return
-
-            # Extract comprehensive weather data
-            weather_condition = weather_data["weather"][0]["main"]
-            weather_description = weather_data["weather"][0]["description"]
-            temp_celsius = round(weather_data["main"]["temp"])
-            temp_fahrenheit = round(temp_celsius * 9/5 + 32)
-            feels_like_c = round(weather_data["main"]["feels_like"])
-            humidity = weather_data["main"]["humidity"]
-            pressure = weather_data["main"]["pressure"]
-            wind_speed = weather_data["wind"]["speed"]
-            wind_direction = weather_data["wind"].get("deg", "N/A")
-            visibility = weather_data.get("visibility", "N/A")
-            uv_index = weather_data.get("uv", "N/A")
-            
-            # Get 5-day forecast for better analysis
-            forecast_response = requests.get(
-                f"https://api.openweathermap.org/data/2.5/forecast?q={city}&units=metric&APPID={weather_api_key}"
-            )
-            forecast_data = forecast_response.json()
-            
-            # Initialize forecast variables
-            avg_temp = "N/A"
-            avg_humidity = "N/A"
-            total_rain = "N/A"
-            
-            if forecast_response.status_code == 200:
-                # Analyze forecast trends
-                forecast_list = forecast_data["list"][:8]  # Next 24 hours (8 x 3-hour intervals)
-                avg_temp = round(sum(item["main"]["temp"] for item in forecast_list) / len(forecast_list))
-                avg_humidity = round(sum(item["main"]["humidity"] for item in forecast_list) / len(forecast_list))
-                total_rain = sum(item.get("rain", {}).get("3h", 0) for item in forecast_list)
+            if demo_mode and not weather_api_key:
+                weather_condition = "Clear"
+                weather_description = "clear sky"
+                temp_celsius = 26
+                temp_fahrenheit = round(temp_celsius * 9 / 5 + 32)
+                feels_like_c = 27
+                humidity = 55
+                pressure = 1012
+                wind_speed = 3.2
+                wind_direction = 120
+                visibility = 10000
+                uv_index = "N/A"
+                avg_temp = 27
+                avg_humidity = 52
+                total_rain = 0.2
             else:
-                st.warning(f"Could not fetch forecast data: {forecast_data.get('message', 'Unknown error')}")
+                response = requests.get(
+                    f"https://api.openweathermap.org/data/2.5/weather?q={city}&units=metric&APPID={weather_api_key}"
+                )
+                weather_data = response.json()
+
+                if response.status_code != 200:
+                    error_msg = weather_data.get("message", "Unknown error occurred")
+                    if response.status_code == 401:
+                        st.error(
+                            f"Invalid Weather API Key: {error_msg}. If you just created the key, it may take up to 2 hours to activate."
+                        )
+                    elif response.status_code == 404:
+                        st.error(f"City not found: {city}")
+                    else:
+                        st.error(f"Weather API Error ({response.status_code}): {error_msg}")
+                    return
+
+                weather_condition = weather_data["weather"][0]["main"]
+                weather_description = weather_data["weather"][0]["description"]
+                temp_celsius = round(weather_data["main"]["temp"])
+                temp_fahrenheit = round(temp_celsius * 9 / 5 + 32)
+                feels_like_c = round(weather_data["main"]["feels_like"])
+                humidity = weather_data["main"]["humidity"]
+                pressure = weather_data["main"]["pressure"]
+                wind_speed = weather_data["wind"]["speed"]
+                wind_direction = weather_data["wind"].get("deg", "N/A")
+                visibility = weather_data.get("visibility", "N/A")
+                uv_index = weather_data.get("uv", "N/A")
+
+                forecast_response = requests.get(
+                    f"https://api.openweathermap.org/data/2.5/forecast?q={city}&units=metric&APPID={weather_api_key}"
+                )
+                forecast_data = forecast_response.json()
+
+                avg_temp = "N/A"
+                avg_humidity = "N/A"
+                total_rain = "N/A"
+
+                if forecast_response.status_code == 200:
+                    forecast_list = forecast_data["list"][:8]
+                    avg_temp = round(sum(item["main"]["temp"] for item in forecast_list) / len(forecast_list))
+                    avg_humidity = round(
+                        sum(item["main"]["humidity"] for item in forecast_list) / len(forecast_list)
+                    )
+                    total_rain = sum(item.get("rain", {}).get("3h", 0) for item in forecast_list)
+                else:
+                    st.warning(f"Could not fetch forecast data: {forecast_data.get('message', 'Unknown error')}")
             
             # Store weather data in session state
             st.session_state.weather_data = {
@@ -492,7 +564,11 @@ def main():
             st.session_state.current_city = city
             st.session_state.current_crop = crop
 
-            worst_days, error = check_weather_forecast(city, weather_api_key)
+            if demo_mode and not weather_api_key:
+                worst_days, error = [], None
+            else:
+                worst_days, error = check_weather_forecast(city, weather_api_key)
+
             if error:
                 st.error(error)
             else:
@@ -536,7 +612,7 @@ def main():
             """
             with st.spinner("🤖 AI is analyzing weather data and generating recommendations..."):
                 response = call_conversation(st.session_state.conversation, query)
-                reply = response["response"] if isinstance(response, dict) else response
+                reply = response
 
             st.session_state.chat_history.append(("User", query))
             st.session_state.chat_history.append(("Assistant", reply))
@@ -610,7 +686,7 @@ def main():
                 st.session_state.chat_history.append(("User", follow_up))
                 with st.spinner("🤖 Consulting AI Models..."):
                     reply = call_conversation(st.session_state.conversation, follow_up)
-                    reply_text = reply["response"] if isinstance(reply, dict) else reply
+                    reply_text = reply
                 st.session_state.chat_history.append(("Assistant", reply_text))
                 st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
