@@ -1,4 +1,11 @@
-
+---
+title: Crop Advisor SaaS
+emoji: 🌱
+colorFrom: green
+colorTo: blue
+sdk: streamlit
+app_file: app.py
+pinned: false
 ---
 
 # 🌾 Crop Advisor — Precision Agriculture SaaS
